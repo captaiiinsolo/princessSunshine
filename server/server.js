@@ -1,14 +1,23 @@
+const { ApolloServer } = require('@apollo/server');
+const { expressMiddleware } = require('@apollo/server/express4');
 const express = require('express');
-const { ApolloServer } = require('apollo-server-express');
+const http = require('http');
+const { makeExecutableSchema } = require('@graphql-tools/schema');
 const path = require('path');
 const { typeDefs, resolvers } = require('./schemas');
 const db = require('./config/connection');
+const dotenv = require('dotenv');
+
+dotenv.config();
 
 const PORT = process.env.PORT || 3001;
 const app = express();
+const httpServer = http.createServer(app);
+
+const schema = makeExecutableSchema({ typeDefs, resolvers });
+
 const server = new ApolloServer({
-  typeDefs,
-  resolvers,
+  schema,
 });
 
 app.use(express.urlencoded({ extended: false }));
@@ -24,17 +33,10 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-const startServer = async (typeDefs, resolvers) => {
-  await server.start();
-
-  server.applyMiddleware({ app });
-
-  db.once('open', () => {
-    app.listen(PORT, () => {
-      console.log(`API server running on port ${PORT}!`);
-      console.log(`Use GraphQL at http://localhost:${PORT}${server.graphqlPath}`);
-    });
+server.start().then(() => {
+  app.use('/graphql', expressMiddleware(server));
+  httpServer.listen({ port: PORT }, () => {
+    console.log(`API server running on port ${PORT}!`);
+    console.log(`Use GraphQL at http://localhost:${PORT}/graphql`);
   });
-};
-
-startServer(typeDefs, resolvers);
+});
